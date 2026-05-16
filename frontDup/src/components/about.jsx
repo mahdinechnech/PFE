@@ -7,7 +7,6 @@ export default function PourquoiNous() {
   return (
     <section className=" py-20 px-6 md:px-20" id="about">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-12">
-
         {/* LEFT IMAGE */}
         <motion.div
           initial={{ opacity: 0, x: -50 }}
@@ -17,7 +16,7 @@ export default function PourquoiNous() {
           className="flex-1"
         >
           <motion.img
-            src="/public/about.jpg"
+            src="/about.jpg"
             alt="Pourquoi nous"
             className="w-full max-w-md mx-auto rounded-2xl shadow-lg"
             animate={{
@@ -48,9 +47,9 @@ export default function PourquoiNous() {
           </h2>
 
           <p className="text-gray-600 mb-6 leading-relaxed">
-            Nous connectons les particuliers aux meilleurs professionnels
-            de leur région en quelques clics. Notre objectif est simple :
-            vous faire gagner du temps et vous offrir un service de qualité.
+            Nous connectons les particuliers aux meilleurs professionnels de
+            leur région en quelques clics. Notre objectif est simple : vous
+            faire gagner du temps et vous offrir un service de qualité.
           </p>
 
           <ul className="space-y-3 text-gray-700">

@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,6 +21,7 @@ const VIEW_MODES = [
   { value: "list", icon: "mdi:view-list-outline" },
 ];
 
+// "Tous" is UI-only, not in the backend enum
 const CATEGORIES = [
   "Tous",
   "Plomberie",
@@ -54,30 +54,6 @@ const CAT_ICONS = {
   Autre: "mdi:dots-horizontal-circle-outline",
 };
 
-// Status badge config — label, colours, icon
-const STATUS_CONFIG = {
-  open: {
-    label: "Approuvée",
-    icon: "mdi:check-circle-outline",
-    className: "bg-emerald-500/90 text-white",
-  },
-  pending: {
-    label: "En attente",
-    icon: "mdi:clock-outline",
-    className: "bg-amber-400/90 text-white",
-  },
-  rejected: {
-    label: "Rejetée",
-    icon: "mdi:close-circle-outline",
-    className: "bg-red-500/90 text-white",
-  },
-  closed: {
-    label: "Fermée",
-    icon: "mdi:lock-outline",
-    className: "bg-gray-700/80 text-white",
-  },
-};
-
 const NAV_ITEMS = [
   {
     id: "explorer",
@@ -106,6 +82,7 @@ const NAV_ITEMS = [
 ];
 
 /* ─── helpers ─── */
+// Backend stores images as "/uploads/filename" — prepend origin if needed
 const resolveImage = (path) => {
   if (!path) return "";
   if (path.startsWith("http")) return path;
@@ -136,15 +113,11 @@ const AnnounceCard = ({
   viewMode,
   onDelete,
   isOwner = false,
-  // When true, always show the status badge (used in "Mes Annonces")
-  showStatus = false,
 }) => {
   const [imgError, setImgError] = useState(false);
 
   const isList = viewMode === "list";
   const imgSrc = resolveImage(annonce.image);
-
-  const statusCfg = STATUS_CONFIG[annonce.status] || STATUS_CONFIG.pending;
 
   return (
     <motion.div
@@ -185,24 +158,11 @@ const AnnounceCard = ({
           {annonce.category}
         </span>
 
-        {/*
-          STATUS BADGE
-          - In explorer: only show when closed
-          - In mes-annonces (showStatus=true): always show with colour-coded status
-        */}
-        {showStatus ? (
-          <span
-            className={`absolute bottom-3 left-3 backdrop-blur-sm text-[10px] font-black uppercase px-2.5 py-1 rounded-lg tracking-wider flex items-center gap-1 ${statusCfg.className}`}
-          >
-            <Icon icon={statusCfg.icon} className="text-xs" />
-            {statusCfg.label}
+        {/* status badge */}
+        {annonce.status === "closed" && (
+          <span className="absolute bottom-3 left-3 bg-gray-800/80 backdrop-blur-sm text-white text-[10px] font-black uppercase px-2.5 py-1 rounded-lg tracking-wider">
+            Fermée
           </span>
-        ) : (
-          annonce.status === "closed" && (
-            <span className="absolute bottom-3 left-3 bg-gray-800/80 backdrop-blur-sm text-white text-[10px] font-black uppercase px-2.5 py-1 rounded-lg tracking-wider">
-              Fermée
-            </span>
-          )
         )}
 
         {/* save button */}
@@ -223,15 +183,19 @@ const AnnounceCard = ({
           />
         </button>
 
-        {/* delete button — only for owner */}
+        {/* delete button */}
         {isOwner && (
           <button
             onClick={(e) => {
               e.stopPropagation();
+
               const confirmDelete = window.confirm(
                 "Voulez-vous vraiment supprimer cette annonce ?",
               );
-              if (confirmDelete) onDelete(annonce._id);
+
+              if (confirmDelete) {
+                onDelete(annonce._id);
+              }
             }}
             className="absolute bottom-3 right-3 w-8 h-8 rounded-xl flex items-center justify-center shadow-md transition-all cursor-pointer bg-red-500/90 text-white hover:bg-red-600 backdrop-blur-sm"
           >
@@ -299,22 +263,13 @@ const AnnounceCard = ({
               : "À discuter"}
           </span>
 
-          {/* Only link to detail page when the annonce is actually approved/open */}
-          {annonce.status === "open" ? (
-            <Link
-              to={`/annonces/${annonce._id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-500 text-orange-500 hover:text-white text-xs font-black rounded-xl transition-all border border-orange-100 hover:border-orange-500"
-            >
-              Voir <Icon icon="mdi:arrow-right" className="text-sm" />
-            </Link>
-          ) : (
-            <span
-              className={`text-[10px] font-black px-2.5 py-1 rounded-lg ${statusCfg.className}`}
-            >
-              {statusCfg.label}
-            </span>
-          )}
+          <Link
+            to={`/annonces/${annonce._id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-500 text-orange-500 hover:text-white text-xs font-black rounded-xl transition-all border border-orange-100 hover:border-orange-500"
+          >
+            Voir <Icon icon="mdi:arrow-right" className="text-sm" />
+          </Link>
         </div>
       </div>
     </motion.div>
@@ -430,22 +385,17 @@ const SettingsPanel = ({ user }) => (
 /* ═══════════════════════════════ MAIN PAGE ═══════════════════════════════ */
 export default function AnnoncesPage() {
   const navigate = useNavigate();
-  const searchLoc = useLocation();
+  const searchLoc = useLocation(); // FIX: was assigned useNavigate() by mistake
   const searchParams = new URLSearchParams(searchLoc.search);
 
   /* layout */
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("explorer");
 
-  /* ── Public annonces (explorer) ── */
+  /* annonces state — single source of truth, no duplicate useState/useQuery */
   const [annonces, setAnnonces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  /* ── User's own annonces (all statuses) ── */
-  const [myAnnonces, setMyAnnonces] = useState([]);
-  const [myLoading, setMyLoading] = useState(false);
-  const [myError, setMyError] = useState(null);
 
   const [sort, setSort] = useState("recent");
   const [viewMode, setViewMode] = useState("grid");
@@ -491,7 +441,7 @@ export default function AnnoncesPage() {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  /* ── Fetch public/approved annonces for the explorer ── */
+  /* fetch annonces from backend — GET /api/annonces */
   const fetchAnnonces = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -499,7 +449,7 @@ export default function AnnoncesPage() {
       const res = await fetch("/api/annonces");
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur serveur");
-      setAnnonces(data);
+      setAnnonces(data); // data is an array of populated annonces
     } catch (err) {
       setError(err.message || "Impossible de charger les annonces.");
     } finally {
@@ -507,46 +457,10 @@ export default function AnnoncesPage() {
     }
   }, []);
 
-  /*
-   * ── Fetch the current user's OWN annonces (all statuses) ──
-   *
-   * This hits a dedicated endpoint that the backend should protect with auth
-   * and return ALL statuses (pending, open, rejected, closed) for the owner.
-   *
-   * Expected endpoint: GET /api/annonces/mine
-   * Auth: Bearer token
-   *
-   * If your backend doesn't have this route yet, see the note below.
-   */
-  const fetchMyAnnonces = useCallback(async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    setMyLoading(true);
-    setMyError(null);
-    try {
-      const res = await fetch("/api/annonces/mine", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Erreur serveur");
-      setMyAnnonces(data);
-    } catch (err) {
-      setMyError(err.message || "Impossible de charger vos annonces.");
-    } finally {
-      setMyLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchAnnonces();
-  }, [fetchAnnonces]);
-
-  /* Fetch user's annonces when the tab becomes active (lazy) */
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (activeNav === "mes-annonces") fetchMyAnnonces();
-  }, [activeNav, fetchMyAnnonces]);
+    fetchAnnonces();
+  }, [fetchAnnonces]);
 
   /* persist saved list */
   useEffect(() => {
@@ -559,23 +473,35 @@ export default function AnnoncesPage() {
     );
   }, []);
 
-  const handleDeleteAnnonce = useCallback(async (id) => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/annonces/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Erreur suppression");
+  const handleDeleteAnnonce = useCallback(
+    async (id) => {
+      try {
+        const token = localStorage.getItem("token");
 
-      setAnnonces((prev) => prev.filter((a) => a._id !== id));
-      setMyAnnonces((prev) => prev.filter((a) => a._id !== id));
-      setSavedIds((prev) => prev.filter((x) => x !== id));
-    } catch (err) {
-      alert(err.message || "Impossible de supprimer l'annonce");
-    }
-  }, []);
+        const res = await fetch(`/api/annonces/${id}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.message || "Erreur suppression");
+        }
+
+        // remove from annonces
+        setAnnonces((prev) => prev.filter((a) => a._id !== id));
+
+        // remove from saved
+        setSavedIds((prev) => prev.filter((x) => x !== id));
+      } catch (err) {
+        alert(err.message || "Impossible de supprimer l'annonce");
+      }
+    },
+    [setAnnonces],
+  );
 
   const handleLogout = () => {
     localStorage.removeItem("isAuthenticated");
@@ -584,10 +510,11 @@ export default function AnnoncesPage() {
     navigate("/login");
   };
 
-  /* filter + sort for the explorer (public, open only) */
+  /* filter + sort — status "open" filter matches backend default */
   const filtered = annonces
     .filter((a) => {
-      if (activeNav === "explorer" && a.status !== "open") return false;
+      // Only show open annonces in the explorer
+      if (activeNav === "explorer" && a.status === "closed") return false;
 
       const qMatch =
         !debouncedQ ||
@@ -617,7 +544,14 @@ export default function AnnoncesPage() {
       return 0;
     });
 
+  // FIX: compare both populated object id and raw ObjectId string
   const savedAnnonces = annonces.filter((a) => savedIds.includes(a._id));
+  const myAnnonces = annonces.filter(
+    (a) =>
+      a.creator?._id === user?._id ||
+      a.creator?._id?.toString() === user?._id ||
+      a.creator === user?._id,
+  );
   const paginated = filtered.slice(0, page * PER_PAGE);
   const hasMore = paginated.length < filtered.length;
 
@@ -632,20 +566,6 @@ export default function AnnoncesPage() {
   const initials = user?.username
     ? user.username.slice(0, 2).toUpperCase()
     : "?";
-
-  /* Status filter tabs for "Mes Annonces" */
-  const [myStatusFilter, setMyStatusFilter] = useState("all");
-  const STATUS_TABS = [
-    { value: "all", label: "Toutes", icon: "mdi:format-list-bulleted" },
-    { value: "open", label: "Approuvées", icon: "mdi:check-circle-outline" },
-    { value: "pending", label: "En attente", icon: "mdi:clock-outline" },
-    { value: "rejected", label: "Rejetées", icon: "mdi:close-circle-outline" },
-    { value: "closed", label: "Fermées", icon: "mdi:lock-outline" },
-  ];
-  const filteredMyAnnonces =
-    myStatusFilter === "all"
-      ? myAnnonces
-      : myAnnonces.filter((a) => a.status === myStatusFilter);
 
   /* ── render ── */
   return (
@@ -710,13 +630,6 @@ export default function AnnoncesPage() {
           <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
             {NAV_ITEMS.map((item) => {
               const isActive = activeNav === item.id;
-              const badge =
-                item.id === "ma-liste"
-                  ? savedIds.length
-                  : item.id === "mes-annonces"
-                    ? myAnnonces.length
-                    : 0;
-
               return (
                 <button
                   key={item.id}
@@ -741,11 +654,18 @@ export default function AnnoncesPage() {
                     </span>
                   )}
 
-                  {badge > 0 && (
+                  {item.id === "ma-liste" && savedIds.length > 0 && (
                     <span
                       className={`ml-auto shrink-0 min-w-5 h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center ${isActive ? "bg-white/30 text-white" : "bg-orange-100 text-orange-600"} ${sidebarCollapsed ? "absolute -top-1 -right-1 min-w-4 h-4" : ""}`}
                     >
-                      {badge}
+                      {savedIds.length}
+                    </span>
+                  )}
+                  {item.id === "mes-annonces" && myAnnonces.length > 0 && (
+                    <span
+                      className={`ml-auto shrink-0 min-w-5 h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center ${isActive ? "bg-white/30 text-white" : "bg-orange-100 text-orange-600"} ${sidebarCollapsed ? "absolute -top-1 -right-1 min-w-4 h-4" : ""}`}
+                    >
+                      {myAnnonces.length}
                     </span>
                   )}
 
@@ -1057,8 +977,8 @@ export default function AnnoncesPage() {
                             saved={savedIds.includes(annonce._id)}
                             onToggleSave={toggleSave}
                             onDelete={handleDeleteAnnonce}
-                            isOwner={false}
-                            viewMode={viewMode}
+                            isOwner={true}
+                            viewMode="grid"
                           />
                         ))}
                       </AnimatePresence>
@@ -1097,7 +1017,8 @@ export default function AnnoncesPage() {
                   </h2>
                   <p className="text-sm text-gray-400 font-medium mt-0.5">
                     {myAnnonces.length} annonce
-                    {myAnnonces.length !== 1 ? "s" : ""} au total
+                    {myAnnonces.length !== 1 ? "s" : ""} publiée
+                    {myAnnonces.length !== 1 ? "s" : ""}
                   </p>
                 </div>
                 <Link
@@ -1109,64 +1030,13 @@ export default function AnnoncesPage() {
                 </Link>
               </div>
 
-              {/* Status filter tabs */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                {STATUS_TABS.map((tab) => {
-                  const count =
-                    tab.value === "all"
-                      ? myAnnonces.length
-                      : myAnnonces.filter((a) => a.status === tab.value).length;
-                  return (
-                    <button
-                      key={tab.value}
-                      onClick={() => setMyStatusFilter(tab.value)}
-                      className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                        myStatusFilter === tab.value
-                          ? "bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-200"
-                          : "bg-white text-gray-500 border-gray-100 hover:border-orange-200 hover:text-orange-500"
-                      }`}
-                    >
-                      <Icon icon={tab.icon} className="text-sm" />
-                      {tab.label}
-                      {count > 0 && (
-                        <span
-                          className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black ${
-                            myStatusFilter === tab.value
-                              ? "bg-white/30 text-white"
-                              : "bg-orange-100 text-orange-600"
-                          }`}
-                        >
-                          {count}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {myLoading ? (
+              {loading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                   {Array.from({ length: 3 }).map((_, i) => (
                     <SkeletonCard key={i} />
                   ))}
                 </div>
-              ) : myError ? (
-                <div className="flex flex-col items-center justify-center py-24 gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center">
-                    <Icon
-                      icon="mdi:wifi-off"
-                      className="text-3xl text-red-400"
-                    />
-                  </div>
-                  <p className="text-gray-400 font-bold text-sm">{myError}</p>
-                  <button
-                    onClick={fetchMyAnnonces}
-                    className="px-4 py-2 bg-orange-500 text-white rounded-xl text-sm font-black hover:bg-orange-600 transition cursor-pointer"
-                  >
-                    Réessayer
-                  </button>
-                </div>
-              ) : filteredMyAnnonces.length === 0 ? (
+              ) : myAnnonces.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1180,38 +1050,29 @@ export default function AnnoncesPage() {
                   </div>
                   <div className="text-center">
                     <h3 className="text-lg font-black text-gray-800">
-                      {myStatusFilter === "all"
-                        ? "Aucune annonce publiée"
-                        : `Aucune annonce ${STATUS_TABS.find((t) => t.value === myStatusFilter)?.label.toLowerCase()}`}
+                      Aucune annonce publiée
                     </h3>
                     <p className="text-gray-400 text-sm mt-1">
-                      {myStatusFilter === "all"
-                        ? "Créez votre première annonce et touchez des clients."
-                        : "Changez de filtre ou créez une nouvelle annonce."}
+                      Créez votre première annonce et touchez des clients.
                     </p>
                   </div>
-                  {myStatusFilter === "all" && (
-                    <Link
-                      to="/create-annonce"
-                      className="px-5 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-black hover:bg-orange-600 transition cursor-pointer shadow-lg shadow-orange-200"
-                    >
-                      Créer une annonce
-                    </Link>
-                  )}
+                  <Link
+                    to="/create-annonce"
+                    className="px-5 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-black hover:bg-orange-600 transition cursor-pointer shadow-lg shadow-orange-200"
+                  >
+                    Créer une annonce
+                  </Link>
                 </motion.div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                   <AnimatePresence>
-                    {filteredMyAnnonces.map((annonce) => (
+                    {myAnnonces.map((annonce) => (
                       <AnnounceCard
                         key={annonce._id}
                         annonce={annonce}
                         saved={savedIds.includes(annonce._id)}
                         onToggleSave={toggleSave}
-                        onDelete={handleDeleteAnnonce}
-                        isOwner={true}
                         viewMode="grid"
-                        showStatus={true}
                       />
                     ))}
                   </AnimatePresence>

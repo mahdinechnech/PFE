@@ -7,7 +7,7 @@ import { User, Star, ChevronLeft, ChevronRight, Car } from "lucide-react";
 const testimonials = [
   {
     name: "Hadjer",
-    role: "Cliente",
+    role: "Client",
     text: "Service rapide et très professionnel.",
     emoji: <User size={20} />,
     rating: 5,
@@ -21,7 +21,7 @@ const testimonials = [
   },
   {
     name: "Lamia",
-    role: "Cliente",
+    role: "Client",
     text: "Livraison trés rapide et livreur respectueux .",
     emoji: <User size={20} />,
     rating: 5,
@@ -35,7 +35,7 @@ const testimonials = [
   },
   {
     name: " Sally",
-    role: "Cliente",
+    role: "Client",
     text: "Coiffeuse incroyable! j'ai adoré.",
     emoji: <User size={20} />,
     rating: 5,

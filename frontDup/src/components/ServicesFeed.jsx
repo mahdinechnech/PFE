@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Briefcase, MapPin, DollarSign, Clock, User, ShieldCheck } from "lucide-react";
+import { MapPin, DollarSign, Clock, User, ShieldCheck } from "lucide-react";
 
 export default function ServicesFeed() {
   const [services, setServices] = useState([]);
@@ -8,18 +8,23 @@ export default function ServicesFeed() {
 
   useEffect(() => {
     fetch("/api/services")
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (Array.isArray(data)) setServices(data);
         setLoading(false);
       })
-      .catch(err => {
+      .catch((err) => {
         console.error(err);
         setLoading(false);
       });
   }, []);
 
-  if (loading) return <div className="py-12 text-center text-gray-500">Chargement des services...</div>;
+  if (loading)
+    return (
+      <div className="py-12 text-center text-gray-500">
+        Chargement des services...
+      </div>
+    );
 
   return (
     <section className="py-12 bg-white" id="services">
@@ -29,7 +34,9 @@ export default function ServicesFeed() {
             <ShieldCheck className="text-orange-500" />
             Services Disponibles
           </h2>
-          <p className="text-gray-500 mt-2">Trouvez le technicien idéal pour vos besoins</p>
+          <p className="text-gray-500 mt-2">
+            Trouvez le technicien idéal pour vos besoins
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -45,13 +52,18 @@ export default function ServicesFeed() {
                   {service.category}
                 </span>
                 <span className="text-gray-400 text-[10px] flex items-center gap-1">
-                  <Clock size={12} /> {new Date(service.createdAt).toLocaleDateString()}
+                  <Clock size={12} />{" "}
+                  {new Date(service.createdAt).toLocaleDateString()}
                 </span>
               </div>
 
-              <h3 className="font-bold text-gray-800 mb-2 group-hover:text-orange-500 transition-colors">{service.title}</h3>
-              <p className="text-gray-500 text-sm line-clamp-2 mb-4">{service.description}</p>
-              
+              <h3 className="font-bold text-gray-800 mb-2 group-hover:text-orange-500 transition-colors">
+                {service.title}
+              </h3>
+              <p className="text-gray-500 text-sm line-clamp-2 mb-4">
+                {service.description}
+              </p>
+
               <div className="space-y-2 border-t pt-4">
                 <div className="flex items-center gap-2 text-gray-700 font-bold">
                   <DollarSign size={16} className="text-green-500" />
@@ -63,7 +75,9 @@ export default function ServicesFeed() {
                 </div>
                 <div className="flex items-center gap-2 text-gray-400 text-xs mt-3 bg-gray-50 p-2 rounded-lg">
                   <User size={14} />
-                  <span>Proposé par: <strong>{service.creator?.username}</strong></span>
+                  <span>
+                    Proposé par: <strong>{service.creator?.username}</strong>
+                  </span>
                 </div>
               </div>
             </motion.div>
@@ -72,7 +86,9 @@ export default function ServicesFeed() {
 
         {services.length === 0 && (
           <div className="text-center py-12 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
-            <p className="text-gray-400 font-medium">Aucun service disponible pour le moment.</p>
+            <p className="text-gray-400 font-medium">
+              Aucun service disponible pour le moment.
+            </p>
           </div>
         )}
       </div>

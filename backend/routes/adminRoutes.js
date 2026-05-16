@@ -1,51 +1,72 @@
-import express from 'express'
-import User from '../models/User.js'
-import { auth, adminOnly } from '../middleware/auth.js'
+import express from "express";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import User from "../models/User.js";
 
 const router = express.Router();
 
-// Get all users
-router.get('/users', auth, adminOnly, async (req, res) => {
+// ─────────────────────────────────────────────
+// ADMIN LOGIN
+// ─────────────────────────────────────────────
+router.post("/admin-login", async (req, res) => {
   try {
-    const users = await User.find().select('-password');
-    res.json(users);
-  } catch (err) {
-    res.status(500).send('Erreur serveur');
-  }
-});
+    const { email, password } = req.body;
 
-// Ban/Unban user
-router.put('/users/ban/:id', auth, adminOnly, async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: 'Utilisateur non trouvé' });
-    
-    if (user.role === 'admin') return res.status(403).json({ message: 'Impossible de bannir un administrateur' });
+    console.log("BODY:", req.body);
 
-    user.isBanned = !user.isBanned;
-    await user.save();
-    res.json(user);
-  } catch (err) {
-    res.status(500).send('Erreur serveur');
-  }
-});
+    // Find admin by email
+    const user = await User.findOne({ email });
 
-// Change user role
-router.put('/users/role/:id', auth, adminOnly, async (req, res) => {
-  try {
-    const { role } = req.body;
-    if (!['client', 'technicien', 'admin'].includes(role)) {
-      return res.status(400).json({ message: 'Rôle invalide' });
+    console.log("USER:", user);
+
+    // User not found
+    if (!user) {
+      return res.status(403).json({
+        message: "Utilisateur introuvable",
+      });
     }
 
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    // Compare password
+    const isMatch = await bcrypt.compare(password, user.password);
 
-    user.role = role;
-    await user.save();
-    res.json(user);
+    console.log("MATCH:", isMatch);
+    console.log("ROLE:", user.role);
+
+    // Wrong password or not admin
+    if (!isMatch || user.role !== "admin") {
+      return res.status(403).json({
+        message: "Accès non autorisé",
+      });
+    }
+
+    // Generate token
+    const token = jwt.sign(
+      {
+        id: user._id,
+        role: user.role,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "7d",
+      },
+    );
+
+    // Send response
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+      },
+    });
   } catch (err) {
-    res.status(500).send('Erreur serveur');
+    console.log(err);
+
+    res.status(500).json({
+      message: "Erreur serveur",
+    });
   }
 });
 
