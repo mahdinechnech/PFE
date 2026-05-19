@@ -20,7 +20,7 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.email.trim() || !formData.password.trim()) {
+    if (!formData.identifier.trim() || !formData.password.trim()) {
       setError("Veuillez remplir tous les champs");
       return;
     }

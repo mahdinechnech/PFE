@@ -140,20 +140,34 @@ export default function CreateAnnonce() {
       fd.append("description", form.description);
       fd.append("location", form.wilaya);
       fd.append("phone", form.phone);
-      fd.append("status", "pending"); // ← always pending; admin must approve
+      fd.append("status", "pending"); // Changed from "pending"
       if (form.budget) fd.append("budget", form.budget);
       if (form.image) fd.append("image", form.image);
 
+      // Debug log
+      console.log("Sending announcement:", {
+        title: form.title,
+        category: form.category,
+        status: "pending",
+      });
+
       const res = await fetch("/api/annonces", {
         method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          // Don't set Content-Type when using FormData
+        },
         body: fd,
       });
+
       const data = await res.json();
+      console.log("Response:", data);
+
       if (!res.ok)
         throw new Error(data.message || data.error || "Erreur serveur");
       setSuccess(true);
     } catch (e) {
+      console.error("Error creating announcement:", e);
       setError(e.message || "Erreur de connexion.");
     } finally {
       setLoading(false);
@@ -275,6 +289,7 @@ export default function CreateAnnonce() {
                     description: "",
                     wilaya: "",
                     budget: "",
+                    phone: "",
                     image: null,
                   });
                   setPreview(null);

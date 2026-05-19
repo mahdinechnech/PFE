@@ -44,14 +44,7 @@ const STATUS_CFG = {
     border: "border-emerald-200",
     text: "text-emerald-800",
   },
-  open: {
-    label: "Disponible",
-    icon: "mdi:check-circle-outline",
-    bar: "from-emerald-400 to-emerald-500",
-    bg: "bg-emerald-50",
-    border: "border-emerald-200",
-    text: "text-emerald-800",
-  },
+
   rejected: {
     label: "Annonce rejetée",
     icon: "mdi:close-circle-outline",
@@ -496,7 +489,7 @@ export default function AnnonceDetail() {
             </div>
 
             {/* ── STATUS BANNER (owner only) ── */}
-            {isOwner && annonce.status !== "open" && (
+            {isOwner && annonce.status !== "pending" && (
               <motion.div
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -872,7 +865,7 @@ export default function AnnonceDetail() {
                     </div>
 
                     {!isOwner &&
-                      (annonce.status === "open" ||
+                      (annonce.status === "pending" ||
                         annonce.status === "approved") && (
                         <div className="space-y-2">
                           <button

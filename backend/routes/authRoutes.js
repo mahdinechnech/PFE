@@ -87,18 +87,13 @@ router.post("/signup", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log("EMAIL:", email);
+    console.log("Login attempt for:", email);
 
-    const user = await User.findOne({
-      $or: [
-        { email: identifier },
-        { phone: identifier },
-        { username: identifier },
-      ],
-    });
+    const user = await User.findOne({ email });
 
-    if (!user)
+    if (!user) {
       return res.status(400).json({ message: "Identifiants invalides" });
+    }
 
     // Block Admin login from basic login
     if (user.role === "admin") {
@@ -113,18 +108,34 @@ router.post("/login", async (req, res) => {
 
     const isMatch = await bcrypt.compare(password, user.password);
 
-    if (!isMatch)
+    if (!isMatch) {
       return res.status(400).json({ message: "Identifiants invalides" });
+    }
 
+    // Generate token with full user info
     const token = jwt.sign(
-      { id: user._id, role: user.role, username: user.username },
+      {
+        _id: user._id,
+        userId: user._id,
+        id: user._id,
+        role: user.role,
+        username: user.username,
+        email: user.email,
+      },
       process.env.JWT_SECRET,
       { expiresIn: "7d" },
     );
-    res.json({ token, user: { username: user.username, role: user.role } });
-  } catch (err) {
-    console.log(err);
 
+    // Remove password from user object
+    const userWithoutPassword = user.toObject();
+    delete userWithoutPassword.password;
+
+    res.json({
+      token,
+      user: userWithoutPassword,
+    });
+  } catch (err) {
+    console.error("Login error:", err);
     res.status(500).json({
       message: err.message,
     });
@@ -136,12 +147,10 @@ router.post("/admin-login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    console.log("EMAIL:", email);
+    console.log("Admin login attempt for:", email);
 
     // Find admin by email
     const user = await User.findOne({ email });
-
-    console.log("USER:", user);
 
     if (!user) {
       return res.status(403).json({
@@ -152,8 +161,8 @@ router.post("/admin-login", async (req, res) => {
     // Compare password
     const isMatch = await bcrypt.compare(password, user.password);
 
-    console.log("MATCH:", isMatch);
-    console.log("ROLE:", user.role);
+    console.log("Password match:", isMatch);
+    console.log("User role:", user.role);
 
     if (!isMatch || user.role !== "admin") {
       return res.status(403).json({
@@ -161,19 +170,39 @@ router.post("/admin-login", async (req, res) => {
       });
     }
 
+    // ✅ GENERATE TOKEN FOR ADMIN
+    const token = jwt.sign(
+      {
+        _id: user._id,
+        userId: user._id,
+        id: user._id,
+        role: user.role,
+        username: user.username,
+        email: user.email,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+
+    console.log("Admin login successful, token generated");
+
+    // Remove password from user object
+    const userWithoutPassword = user.toObject();
+    delete userWithoutPassword.password;
+
+    // ✅ RETURN TOKEN AND USER (MATCHES FRONTEND EXPECTATION)
     res.json({
       success: true,
-      user,
+      token: token,
+      user: userWithoutPassword,
     });
   } catch (err) {
-    console.log(err);
-
+    console.error("Admin login error:", err);
     res.status(500).json({
       message: "Erreur serveur",
     });
   }
 });
-
 // Forgot Password
 router.post("/forgot-password", async (req, res) => {
   try {

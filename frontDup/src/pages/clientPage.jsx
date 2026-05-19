@@ -390,12 +390,19 @@ export default function AnnoncesPage() {
 
   /* layout */
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeNav, setActiveNav] = useState("explorer");
+  const [activeNav, setActiveNav] = useState(
+    searchLoc.state?.tab || "explorer",
+  );
 
-  /* annonces state — single source of truth, no duplicate useState/useQuery */
+  /* public annonces (approved/open only — from public endpoint) */
   const [annonces, setAnnonces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  /* user's own annonces — ALL statuses, fetched with auth token */
+  const [myAnnonces, setMyAnnonces] = useState([]);
+  // eslint-disable-next-line no-unused-vars
+  const [myLoading, setMyLoading] = useState(false);
 
   const [sort, setSort] = useState("recent");
   const [viewMode, setViewMode] = useState("grid");
@@ -441,7 +448,7 @@ export default function AnnoncesPage() {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  /* fetch annonces from backend — GET /api/annonces */
+  /* fetch public annonces — GET /api/annonces (approved/open only) */
   const fetchAnnonces = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -449,7 +456,7 @@ export default function AnnoncesPage() {
       const res = await fetch("/api/annonces");
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur serveur");
-      setAnnonces(data); // data is an array of populated annonces
+      setAnnonces(data);
     } catch (err) {
       setError(err.message || "Impossible de charger les annonces.");
     } finally {
@@ -457,10 +464,52 @@ export default function AnnoncesPage() {
     }
   }, []);
 
+  /* fetch the current user's own annonces — ALL statuses (pending, approved, rejected…) */
+  const fetchMyAnnonces = useCallback(async () => {
+    if (!user?._id) return;
+    setMyLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      // Try dedicated "my annonces" endpoint first
+      const res = await fetch("/api/annonces/mine", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMyAnnonces(Array.isArray(data) ? data : []);
+      } else {
+        // Fallback: fetch all with token and filter by creator
+        const res2 = await fetch("/api/annonces?all=true", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data2 = await res2.json();
+        if (res2.ok && Array.isArray(data2)) {
+          setMyAnnonces(
+            data2.filter(
+              (a) =>
+                a.creator?._id === user._id ||
+                a.creator?._id?.toString() === user._id ||
+                a.creator === user._id,
+            ),
+          );
+        }
+      }
+    } catch {
+      // silently fail — user sees empty list
+    } finally {
+      setMyLoading(false);
+    }
+  }, [user]);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAnnonces();
   }, [fetchAnnonces]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchMyAnnonces();
+  }, [fetchMyAnnonces]);
 
   /* persist saved list */
   useEffect(() => {
@@ -473,41 +522,39 @@ export default function AnnoncesPage() {
     );
   }, []);
 
-  const handleDeleteAnnonce = useCallback(
-    async (id) => {
-      try {
-        const token = localStorage.getItem("token");
+  const handleDeleteAnnonce = useCallback(async (id) => {
+    try {
+      const token = localStorage.getItem("token");
 
-        const res = await fetch(`/api/annonces/${id}`, {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+      const res = await fetch(`/api/annonces/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-        const data = await res.json();
+      const data = await res.json();
 
-        if (!res.ok) {
-          throw new Error(data.message || "Erreur suppression");
-        }
-
-        // remove from annonces
-        setAnnonces((prev) => prev.filter((a) => a._id !== id));
-
-        // remove from saved
-        setSavedIds((prev) => prev.filter((x) => x !== id));
-      } catch (err) {
-        alert(err.message || "Impossible de supprimer l'annonce");
+      if (!res.ok) {
+        throw new Error(data.message || "Erreur suppression");
       }
-    },
-    [setAnnonces],
-  );
+
+      // remove from both lists
+      setAnnonces((prev) => prev.filter((a) => a._id !== id));
+      setMyAnnonces((prev) => prev.filter((a) => a._id !== id));
+
+      // remove from saved
+      setSavedIds((prev) => prev.filter((x) => x !== id));
+    } catch (err) {
+      alert(err.message || "Impossible de supprimer l'annonce");
+    }
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("isAuthenticated");
     localStorage.removeItem("token");
     localStorage.removeItem("currentUser");
-    navigate("/login");
+    navigate("/");
   };
 
   /* filter + sort — status "open" filter matches backend default */
@@ -546,12 +593,6 @@ export default function AnnoncesPage() {
 
   // FIX: compare both populated object id and raw ObjectId string
   const savedAnnonces = annonces.filter((a) => savedIds.includes(a._id));
-  const myAnnonces = annonces.filter(
-    (a) =>
-      a.creator?._id === user?._id ||
-      a.creator?._id?.toString() === user?._id ||
-      a.creator === user?._id,
-  );
   const paginated = filtered.slice(0, page * PER_PAGE);
   const hasMore = paginated.length < filtered.length;
 

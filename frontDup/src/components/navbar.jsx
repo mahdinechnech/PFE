@@ -65,10 +65,9 @@ const categories = [
 
 const navLinks = [
   { label: "Accueil", to: "/", isAnchor: false },
-  { label: "Services", anchor: "#services" },
   { label: "Annonces", to: "/annonces", isAnchor: false },
   { label: "Forum", to: "/forum", isAnchor: false },
-  { label: "Contact", anchor: "#contact" },
+  { label: "Contact", anchor: "/contact" },
 ];
 
 /* ── tiny helpers ── */

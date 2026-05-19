@@ -56,15 +56,20 @@ const CAT_ICONS = {
 
 // Status badge config — label, colours, icon
 const STATUS_CONFIG = {
-  open: {
-    label: "Approuvée",
-    icon: "mdi:check-circle-outline",
-    className: "bg-emerald-500/90 text-white",
-  },
   pending: {
     label: "En attente",
     icon: "mdi:clock-outline",
     className: "bg-amber-400/90 text-white",
+  },
+  approved: {
+    label: "Approuvée",
+    icon: "mdi:check-circle-outline",
+    className: "bg-emerald-500/90 text-white",
+  },
+  open: {
+    label: "Approuvée",
+    icon: "mdi:check-circle-outline",
+    className: "bg-emerald-500/90 text-white",
   },
   rejected: {
     label: "Rejetée",
@@ -136,7 +141,6 @@ const AnnounceCard = ({
   viewMode,
   onDelete,
   isOwner = false,
-  // When true, always show the status badge (used in "Mes Annonces")
   showStatus = false,
 }) => {
   const [imgError, setImgError] = useState(false);
@@ -185,11 +189,6 @@ const AnnounceCard = ({
           {annonce.category}
         </span>
 
-        {/*
-          STATUS BADGE
-          - In explorer: only show when closed
-          - In mes-annonces (showStatus=true): always show with colour-coded status
-        */}
         {showStatus ? (
           <span
             className={`absolute bottom-3 left-3 backdrop-blur-sm text-[10px] font-black uppercase px-2.5 py-1 rounded-lg tracking-wider flex items-center gap-1 ${statusCfg.className}`}
@@ -299,22 +298,13 @@ const AnnounceCard = ({
               : "À discuter"}
           </span>
 
-          {/* Only link to detail page when the annonce is actually approved/open */}
-          {annonce.status === "open" ? (
-            <Link
-              to={`/annonces/${annonce._id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-500 text-orange-500 hover:text-white text-xs font-black rounded-xl transition-all border border-orange-100 hover:border-orange-500"
-            >
-              Voir <Icon icon="mdi:arrow-right" className="text-sm" />
-            </Link>
-          ) : (
-            <span
-              className={`text-[10px] font-black px-2.5 py-1 rounded-lg ${statusCfg.className}`}
-            >
-              {statusCfg.label}
-            </span>
-          )}
+          <Link
+            to={`/annonces/${annonce._id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-500 text-orange-500 hover:text-white text-xs font-black rounded-xl transition-all border border-orange-100 hover:border-orange-500"
+          >
+            Voir <Icon icon="mdi:arrow-right" className="text-sm" />
+          </Link>
         </div>
       </div>
     </motion.div>
@@ -491,7 +481,7 @@ export default function AnnoncesPage() {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  /* ── Fetch public/approved annonces for the explorer ── */
+  /* ── Fetch public annonces for the explorer (approved/open only) ── */
   const fetchAnnonces = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -507,31 +497,38 @@ export default function AnnoncesPage() {
     }
   }, []);
 
-  /*
-   * ── Fetch the current user's OWN annonces (all statuses) ──
-   *
-   * This hits a dedicated endpoint that the backend should protect with auth
-   * and return ALL statuses (pending, open, rejected, closed) for the owner.
-   *
-   * Expected endpoint: GET /api/annonces/mine
-   * Auth: Bearer token
-   *
-   * If your backend doesn't have this route yet, see the note below.
-   */
+  /* ── Fetch the current user's OWN annonces (ALL statuses) using /mine endpoint ── */
   const fetchMyAnnonces = useCallback(async () => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      console.log("No authentication token found");
+      return;
+    }
 
     setMyLoading(true);
     setMyError(null);
     try {
+      console.log("📡 Fetching user's announcements from /api/annonces/mine");
       const res = await fetch("/api/annonces/mine", {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
+
+      console.log("Response status:", res.status);
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Erreur serveur");
+      }
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Erreur serveur");
-      setMyAnnonces(data);
+      console.log(`✅ Received ${data.length} announcements:`, data);
+
+      setMyAnnonces(Array.isArray(data) ? data : []);
     } catch (err) {
+      console.error("❌ Error fetching my annonces:", err);
       setMyError(err.message || "Impossible de charger vos annonces.");
     } finally {
       setMyLoading(false);
@@ -542,10 +539,11 @@ export default function AnnoncesPage() {
     fetchAnnonces();
   }, [fetchAnnonces]);
 
-  /* Fetch user's annonces when the tab becomes active (lazy) */
+  /* Fetch user's annonces when the tab becomes active */
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (activeNav === "mes-annonces") fetchMyAnnonces();
+    if (activeNav === "mes-annonces") {
+      fetchMyAnnonces();
+    }
   }, [activeNav, fetchMyAnnonces]);
 
   /* persist saved list */
@@ -584,10 +582,16 @@ export default function AnnoncesPage() {
     navigate("/login");
   };
 
-  /* filter + sort for the explorer (public, open only) */
+  /* filter + sort for the explorer (public, approved/open only) */
   const filtered = annonces
     .filter((a) => {
-      if (activeNav === "explorer" && a.status !== "open") return false;
+      // Only show approved/open announcements in explorer
+      if (
+        activeNav === "explorer" &&
+        a.status !== "open" &&
+        a.status !== "approved"
+      )
+        return false;
 
       const qMatch =
         !debouncedQ ||
@@ -637,8 +641,12 @@ export default function AnnoncesPage() {
   const [myStatusFilter, setMyStatusFilter] = useState("all");
   const STATUS_TABS = [
     { value: "all", label: "Toutes", icon: "mdi:format-list-bulleted" },
-    { value: "open", label: "Approuvées", icon: "mdi:check-circle-outline" },
     { value: "pending", label: "En attente", icon: "mdi:clock-outline" },
+    {
+      value: "approved",
+      label: "Approuvées",
+      icon: "mdi:check-circle-outline",
+    },
     { value: "rejected", label: "Rejetées", icon: "mdi:close-circle-outline" },
     { value: "closed", label: "Fermées", icon: "mdi:lock-outline" },
   ];
